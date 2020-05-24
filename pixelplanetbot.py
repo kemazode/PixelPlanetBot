@@ -326,33 +326,37 @@ def main():
     
     # If program receives SIGTERM or SIGINT, it'll be able to close headless browser safely
     with PixelPlanetBot(args.x, args.y, headless=args.headless, debug=True) as bot:
-        step = 0
+        step = args.step - 1
         
         ix, iy = 1, 0             
         if args.direction == 'vertical':
             ix, iy = 0, 1
                 
+        # Get all indices of the image
         indices = itertools.product(range(size[ix]), range(size[iy]))
+        
+        # Discard transparent pixels
+        indices = (i for i in indices if pix[i[ix], i[iy]][3] >= 0.2 * 255)
+        
+        # Shuffle with specific method
         indices = shuffle(indices, args.method)
+        
+        # Set offset with respect to "step"
+        indices = (i for n, i in enumerate(indices) if n >= step)
         
         pixels = deque(maxlen=6)
         for i in indices:
             cur_img_pos = Pos(i[ix], i[iy])
-            if pix[cur_img_pos][3] < 0.2 * 255: 
-                continue
-            step += 1
-            if step < args.step:
-                continue            
             cur_coord = Pos(args.x + cur_img_pos.x, args.y + cur_img_pos.y)
             if drawPixel(bot, cur_coord.x, cur_coord.y, pix[cur_img_pos][:3]) == False:                
-                # Most likely a few last pixels wasn't drew either                
+                # Most likely a few last pixels weren't drew either                
                 for j in pixels:
                     img_pos = Pos(j[ix], j[iy])
                     coord = Pos(args.x + img_pos.x, args.y + img_pos.y)
                     drawPixel(bot, coord.x, coord.y, pix[img_pos][:3])
                     print(f'[Revision] {coord} colored, time = {bot.getCoolDownTime()}')                     
                     sleep(0.2)
-                    
+            step += 1                    
             print(f'[Step {step}] {cur_coord} colored, image[{cur_img_pos.x}, {cur_img_pos.y}], time = {bot.getCoolDownTime()}')
             pixels.append(i)
             sleep(0.2)

@@ -9,15 +9,17 @@ from collections import namedtuple
 from collections import deque
 from PIL import Image
 from time import sleep
-import sys, logging, argparse, random
-import itertools
+from playsound import playsound
+import sys, logging, argparse
+import itertools, random
 
 import notify2
 def Notify(msg):
+    playsound('sound.wav') # Run not async
     notify2.init('Notification')
     n = notify2.Notification(msg)
     n.set_urgency(notify2.URGENCY_NORMAL)
-    n.show()
+    n.show()        
 
 HomeUrl = "https://pixelplanet.fun"  
 FormatUrl = "https://pixelplanet.fun/#d,{},{},16"
@@ -282,8 +284,10 @@ def drawPixel(bot, cx, cy, rgb):
     while True:                                          
         try:        
             bot.PickColor(*rgb)
-            cooldown = bot.getCoolDownTime()
+            #cd_before = bot.getCoolDownTime()
             bot.DrawPoint(cx, cy)
+            #cd_after = bot.getCoolDownTime()
+            #if cd_before < cd_after: # if pixel was set
             break
         except BotInterception:
            Notify('A problem has occured that needs your attention.')        
@@ -344,7 +348,7 @@ def main():
         # Set offset with respect to "step"
         indices = (i for n, i in enumerate(indices) if n >= step)
         
-        pixels = deque(maxlen=6)
+        pixels = deque(maxlen=8)
         for i in indices:
             cur_img_pos = Pos(i[ix], i[iy])
             cur_coord = Pos(args.x + cur_img_pos.x, args.y + cur_img_pos.y)

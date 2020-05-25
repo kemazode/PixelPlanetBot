@@ -88,25 +88,31 @@ class PixelPlanetBot:
         self.log.debug(elem.tag_name)
         self.CheckAccess()
         ActionChains(self.driver).move_to_element(elem).perform()
-        
+
     def _move_by_offset(self, x, y):
-        self.log.debug(f'To ({x}, {y})')
+        self.log.debug(f'To ({x}, {y}) and click')
         self.CheckAccess()
         try:
             ActionChains(self.driver).move_to_element(self.canvas) \
                 .move_by_offset(x, y).perform()
         except MoveTargetOutOfBoundsException as e:
             self.log.error(str(e))
+            self.OnCaptcha()    
+            
+    def _move_by_offset_and_click(self, x, y):
+        self.log.debug(f'To ({x}, {y}) and click')
+        self.CheckAccess()
+        try:
+            ActionChains(self.driver).move_to_element(self.canvas) \
+                .move_by_offset(x, y).click().perform()
+        except MoveTargetOutOfBoundsException as e:
+            self.log.error(str(e))
             self.OnCaptcha()
         
-    def _click_on_element(self, elem=None):
+    def _click_on_element(self, elem):
         self.CheckAccess()
-        if elem:
-            self.log.debug(elem.tag_name)        
-            elem.click()
-        else:
-            self.log.debug('Just click')
-            ActionChains(self.driver).click().perform()
+        self.log.debug(elem.tag_name)        
+        elem.click()
             
     def _send_keys(self, keys):
         self.log.debug(f'Keys = {repr(keys)}')        
@@ -172,8 +178,9 @@ class PixelPlanetBot:
             offset = \
                 Pos(offset.x + step*(x - cur.x),
                     offset.y + step*(y - cur.y))
-            self._move_by_offset(*offset)
+            #self._move_by_offset(*offset)
             self.log.debug(f'Adjusted offset = {offset}, adjusted coordinates = {self.getMouseCoord()}')
+        return offset
     
     def CoordOnScreen(self, x, y): 
         rec_size = 100
@@ -205,12 +212,12 @@ class PixelPlanetBot:
     def Move(self, x, y):
         self.log.debug(f'({x}, {y})')
         if self.CoordOnScreen(x, y):
-            self.MoveCursor(x, y)
+            return self.MoveCursor(x, y)
         else:
             while not self.CoordOnScreen(x, y):
                 direc = self.CoordRelativeToCentre(x, y)
                 self.MoveScreenInDirection(direc)
-            self.MoveCursor(x, y)
+            return self.MoveCursor(x, y)
                      
     def getCoolDownTime(self):
         time = [int(i.zfill(1)) for i in self.cooldownbox.text.split(':')]
@@ -266,13 +273,14 @@ class PixelPlanetBot:
     
     def DrawPoint(self, x, y): # Interact directly with webdriver 
         self.log.debug(f'In ({x}, {y})')
-        self.Move(x, y)        
+        offset = self.Move(x, y)        
        
         wait = self.getCoolDownTime() - 53
         sleep(max(0, wait)) 
         
         try:    
-            self._click_on_element()
+            # Allow us to click right after moving
+            self._move_by_offset_and_click(*offset) 
         # Exception raises when captcha's been already appeared so the last pixel
         # is waiting for the captcha resolving and hasn't been drawn on the map yet
         except ElementClickInterceptedException as e:
@@ -284,16 +292,13 @@ def drawPixel(bot, cx, cy, rgb):
     while True:                                          
         try:        
             bot.PickColor(*rgb)
-            #cd_before = bot.getCoolDownTime()
             bot.DrawPoint(cx, cy)
-            #cd_after = bot.getCoolDownTime()
-            #if cd_before < cd_after: # if pixel was set
             break
         except BotInterception:
            Notify('A problem has occured that needs your attention.')        
            input('Press Enter to continue drawing if the problem\'s been solved...')
            intercepted = True
-    return not intercepted
+    return {'intercepted': intercepted}
 
 def shuffle(indices, method):
     res = None
@@ -347,12 +352,15 @@ def main():
         
         # Set offset with respect to "step"
         indices = (i for n, i in enumerate(indices) if n >= step)
-        
+        indices, to_count = itertools.tee(indices)
+        steps = sum(1 for i in to_count)
+                
         pixels = deque(maxlen=8)
         for i in indices:
             cur_img_pos = Pos(i[ix], i[iy])
             cur_coord = Pos(args.x + cur_img_pos.x, args.y + cur_img_pos.y)
-            if drawPixel(bot, cur_coord.x, cur_coord.y, pix[cur_img_pos][:3]) == False:                
+            ans = drawPixel(bot, cur_coord.x, cur_coord.y, pix[cur_img_pos][:3])
+            if ans['intercepted'] == True:
                 # Most likely a few last pixels weren't drew either                
                 for j in pixels:
                     img_pos = Pos(j[ix], j[iy])
@@ -361,7 +369,7 @@ def main():
                     print(f'[Revision] {coord} colored, time = {bot.getCoolDownTime()}')                     
                     sleep(0.2)
             step += 1                    
-            print(f'[Step {step}] {cur_coord} colored, image[{cur_img_pos.x}, {cur_img_pos.y}], time = {bot.getCoolDownTime()}')
+            print(f'[Step {step}/{steps} {round(step/steps*100,2)}%] {cur_coord} painted, image[{cur_img_pos.x}, {cur_img_pos.y}], time = {bot.getCoolDownTime()}')
             pixels.append(i)
             sleep(0.2)
         Notify('Work has done')

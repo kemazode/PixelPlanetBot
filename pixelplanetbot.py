@@ -279,7 +279,7 @@ class PixelPlanetBot:
         sleep(max(0, wait)) 
         
         try:    
-            # Allow us to click right after moving
+            # Clicking performs right after moving
             self._move_by_offset_and_click(*offset) 
         # Exception raises when captcha's been already appeared so the last pixel
         # is waiting for the captcha resolving and hasn't been drawn on the map yet
@@ -304,8 +304,9 @@ def shuffle(indices, method):
     res = None
     print(f'Shuffling with method: {method}')
     if method == 'chessboard':
-        odd_indices = (i for i in indices if (i[0]+i[1])%2)
-        even_indices = (i for i in indices if not (i[0]+i[1])%2)
+        indices_1, indices_2 = itertools.tee(indices)
+        odd_indices = (i for i in indices_1 if (i[0]+i[1])%2 == 1)
+        even_indices = (i for i in indices_2 if (i[0]+i[1])%2 == 0)
         res = itertools.chain(even_indices, odd_indices)
     elif method == 'random':
         # Ensures getting the same shuffle for same data arrays
@@ -345,15 +346,16 @@ def main():
         indices = itertools.product(range(size[ix]), range(size[iy]))
         
         # Discard transparent pixels
-        indices = (i for i in indices if pix[i[ix], i[iy]][3] >= 0.2 * 255)
+        indices = (i for i in indices if pix[i[ix], i[iy]][3] >= 0.2 * 255)         
+        
+        indices, to_count = itertools.tee(indices)       
+        steps = sum(1 for i in to_count)
         
         # Shuffle with specific method
         indices = shuffle(indices, args.method)
         
         # Set offset with respect to "step"
         indices = (i for n, i in enumerate(indices) if n >= step)
-        indices, to_count = itertools.tee(indices)
-        steps = sum(1 for i in to_count)
                 
         pixels = deque(maxlen=8)
         for i in indices:
